@@ -1,24 +1,10 @@
-class KHeap:
-    def __init__(self, k, cmp ='min'):
-        self.k = k
-        self.cmp = cmp
+from ds import DS
+
+class KHeap(DS):
+    def __init__(self, cmp='min', k=2):
         self.list = []
-
-    def __len__(self):
-        return len(self.list)
-
-    def __setitem__(self, idx, val):
-        self.list[idx] = val
-
-    def __getitem__(self, idx):
-        return self.list[idx]
-
-    def __delitem__(self, idx):
-        del self.list[idx]
-
-    # Print `K-ary Heap` as a list
-    def _print(self):
-        print(self.list)
+        self.cmp = cmp
+        self.k = k
 
     # Get parent's index from child's index
     def _pidx(self, cidx):
@@ -39,40 +25,48 @@ class KHeap:
             raise Exception('Undefined compare type')
 
     # Restore Down
-    def resdown(self, idx):
+    def _resdown(self, idx):
         tidx = idx
         for cord in range(self.k):
             cidx = self._cidx(idx, cord)
-            if cidx < len(self) and self._comp(self[cidx], self[tidx]):
+            if cidx < len(self.list) \
+                    and self._comp(self.list[cidx], self.list[tidx]):
                 tidx = cidx
         if (tidx != idx):
-            self[tidx], self[idx] = self[idx], self[tidx]
-            self.resdown(tidx)
+            self.list[tidx], self.list[idx] = self.list[idx], self.list[tidx]
+            self._resdown(tidx)
 
     # Restore Up
-    def resup(self, idx):
+    def _resup(self, idx):
         while (idx > 0):
             pidx = self._pidx(idx)
-            if self._comp(self[idx], self[pidx]):
-                self[pidx], self[idx] = self[idx], self[pidx]
+            if self._comp(self.list[idx], self.list[pidx]):
+                self.list[pidx], self.list[idx] = self.list[idx], self.list[pidx]
             idx = pidx
+
+    # Get the top element
+    def gettop(self):
+        if not len(self.list):
+            raise Exception('Heap is empty')
+        return self.list[0]
 
     # Extract the top element and keep heap properties
     def extracttop(self):
-        if not len(self):
-            raise Exception('Heap is empty')
-        top = self[0]
-        self[0] = self[-1]
-        del self[-1]
-        self.resdown(0)
+        top = self.gettop()
+        self.list[0] = self.list[-1]
+        del self.list[-1]
+        self._resdown(0)
         return top
 
     # Insert an element and keep heap properties
     def insert(self, val):
         self.list.append(val)
-        self.resup(len(self) - 1)
+        self._resup(len(self.list) - 1)
 
     # Print all infomation about `K-ary Heap`
     def print(self):
-        print(f'{self.k}-ary {self.cmp[0].upper()}{self.cmp[1:].lower()} Heap')
-        self._print()
+        print(
+            f'{self.k}-ary {self.cmp[0].upper()}{self.cmp[1:].lower()} Heap',
+            self.list,
+            sep=': '
+        )
