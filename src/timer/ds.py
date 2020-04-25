@@ -1,4 +1,4 @@
-# Data Structure Base Classs
+# Data Structure Base Class
 
 class DS(object):
     def __init__(self, cmp):

@@ -1,16 +1,18 @@
 from unittest import main, TestCase
 from heapq import heappush, heappop
 
+from dst import DST
+import os, sys
+sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/' + '..'))
 from kheap import KHeap
 from rbtree import RBTree
-from tests.datagen import get_data
 
-class FuncTest(TestCase):
+class FuncTest(TestCase, DST):
     def test_rbtree(self):
         def _test(dlen):
             heap = []
             rbtree = RBTree()
-            data = get_data(dlen)
+            data = self.get_data(dlen)
             for val in data:
                 heappush(heap, val)
                 rbtree.insert(val)
@@ -22,13 +24,13 @@ class FuncTest(TestCase):
                 )
         for dlen in range(1, 100):
             _test(dlen)
-            print(f'Red-Black Tree With {dlen} Data -- Test Passed')
+            print(f'Red-Black Tree With {dlen} Data --- Test Passed')
 
     def test_kheap(self):
         def _test(k, dlen):
             heap = []
             kheap = KHeap(k=k)
-            data = get_data(dlen)
+            data = self.get_data(dlen)
             for val in data:
                 heappush(heap, val)
                 kheap.insert(val)
@@ -41,7 +43,7 @@ class FuncTest(TestCase):
         for k in range(2, 32):
             for dlen in range(1, 100):
                 _test(k, dlen)
-                print(f'{k}-ary Heap With {dlen} Data -- Test Passed')
+                print(f'{k}-ary Heap With {dlen} Data --- Test Passed')
 
 if __name__ == '__main__':
     main()
