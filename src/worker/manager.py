@@ -7,10 +7,11 @@ from setproctitle import setproctitle
 
 class Manager(object):
     def __init__(self):
-        self.worker_cnt = 0
+        self.worker_cnt = 4
         self.curr_worker = 0
         self.chld_set = 0
         setproctitle('Yatpd - Master')
+        self.chgworker()
         signal.signal(signal.SIGTTIN, self.check)
         signal.signal(signal.SIGTTOU, self.check)
         while True:
@@ -22,9 +23,11 @@ class Manager(object):
             self.worker_cnt += 1
         elif sig == signal.SIGTTOU:
             self.worker_cnt -= 1
-        else:
-            return
+        if self.worker_cnt != self.curr_worker:
+            self.chgworker()
 
+
+    def chgworker(self):
         if self.worker_cnt > self.curr_worker:
             self.addworkers()
         elif self.worker_cnt < self.curr_worker:
@@ -37,11 +40,10 @@ class Manager(object):
             self.curr_worker += 1
             if os.fork() == 0:
                 setproctitle(f'Yatpd - Worker #{self.curr_worker}')
-            else:
-                if not self.chld_set:
-                    signal.signal(signal.SIGCHLD, self.killzomb)
-                    self.chld_set = 1
                 return
+        if not self.chld_set:
+            signal.signal(signal.SIGCHLD, self.killzomb)
+            self.chld_set = 1
 
 
     def delworkers(self):
