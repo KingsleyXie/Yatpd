@@ -7,54 +7,79 @@ from setproctitle import setproctitle
 
 class Manager(object):
     def __init__(self):
-        self.worker_cnt = 4
+        self.wpids = []
+        self.worker_idx = 1
         self.curr_worker = 0
-        self.chld_set = 0
-        setproctitle('Yatpd - Master')
-        self.chgworker()
+        self.needed_worker = 2
+        self.proj_name = 'Yatpd'
+        setproctitle(f'{self.proj_name} - Master')
+
+        # REF: https://github.com/benoitc/gunicorn/blob/master/gunicorn/util.py
+        def optimize_pipe(fd):
+            import fcntl
+            fcntl.fcntl(fd, fcntl.F_SETFL, \
+                fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK)
+            fcntl.fcntl(fd, fcntl.F_SETFD, \
+                fcntl.fcntl(fd, fcntl.F_GETFD) | fcntl.FD_CLOEXEC)
+        self.pipe = os.pipe()
+        for side in self.pipe:
+            optimize_pipe(side)
+
+        signal.signal(signal.SIGHUP, self.reload)
+
+        self.chgworkers()
         signal.signal(signal.SIGTTIN, self.check)
         signal.signal(signal.SIGTTOU, self.check)
+        signal.signal(signal.SIGCHLD, self.killzombies)
         while True:
             pass
 
 
+    def getwname(self):
+        return f'{self.proj_name} - Worker #{self.worker_idx}'
+
+    def reload(self, sig, frame):
+        pass
+
     def check(self, sig, frame):
         if sig == signal.SIGTTIN:
-            self.worker_cnt += 1
+            self.needed_worker += 1
         elif sig == signal.SIGTTOU:
-            self.worker_cnt -= 1
-        if self.worker_cnt != self.curr_worker:
-            self.chgworker()
+            self.needed_worker -= 1
+        if self.needed_worker != self.curr_worker:
+            self.chgworkers()
 
 
-    def chgworker(self):
-        if self.worker_cnt > self.curr_worker:
+    def chgworkers(self):
+        if self.needed_worker > self.curr_worker:
             self.addworkers()
-        elif self.worker_cnt < self.curr_worker:
+        elif self.needed_worker < self.curr_worker:
             self.delworkers()
 
 
     def addworkers(self):
-        offset = self.worker_cnt - self.curr_worker
+        offset = self.needed_worker - self.curr_worker
         for i in range(offset):
             self.curr_worker += 1
-            if os.fork() == 0:
-                setproctitle(f'Yatpd - Worker #{self.curr_worker}')
+            pid = os.fork()
+            if pid == 0:
+                setproctitle(self.getwname())
                 return
-        if not self.chld_set:
-            signal.signal(signal.SIGCHLD, self.killzomb)
-            self.chld_set = 1
-
+            elif pid > 0:
+                self.worker_idx += 1
+                self.wpids.append(pid)
 
     def delworkers(self):
-        pass
-        # os.kill(-1, signal.SIGKILL)
+        def kill(pid):
+            self.wpids.remove(pid)
+            os.kill(pid, signal.SIGKILL)
 
+        pids = self.wpids[:self.curr_worker - self.needed_worker - 1]
+        for pid in pids:
+            kill(pid)
 
-    def killzomb(self, sig, frame):
-        print('killzomb start')
+    def killzombies(self, sig, frame):
         os.waitpid(-1, os.WNOHANG)
-        print('killzomb end')
 
 
 m = Manager()
