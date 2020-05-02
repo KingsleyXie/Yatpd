@@ -2,53 +2,77 @@
 # https://github.com/benoitc/gunicorn/blob/master/gunicorn/arbiter.py
 
 import os
+import sys
 import signal
+from select import select
 from setproctitle import setproctitle
 
 class Manager(object):
     def __init__(self):
-        self.wpids = []
+        self.proj_name = 'Yatpd'
+        self.log_file = sys.stdout
+        setproctitle(f'{self.proj_name} - Master')
+        print(f'{self.proj_name} - Project Starting...', file=self.log_file)
+
+        self.sig_queue = []
+        self.worker_pids = []
         self.worker_idx = 1
         self.curr_worker = 0
         self.needed_worker = 2
-        self.proj_name = 'Yatpd'
-        setproctitle(f'{self.proj_name} - Master')
-
-        # REF: https://github.com/benoitc/gunicorn/blob/master/gunicorn/util.py
-        def optimize_pipe(fd):
-            import fcntl
-            fcntl.fcntl(fd, fcntl.F_SETFL, \
-                fcntl.fcntl(fd, fcntl.F_GETFL) | os.O_NONBLOCK)
-            fcntl.fcntl(fd, fcntl.F_SETFD, \
-                fcntl.fcntl(fd, fcntl.F_GETFD) | fcntl.FD_CLOEXEC)
-        self.pipe = os.pipe()
-        for side in self.pipe:
-            optimize_pipe(side)
-
-        signal.signal(signal.SIGHUP, self.reload)
-
         self.chgworkers()
-        signal.signal(signal.SIGTTIN, self.check)
-        signal.signal(signal.SIGTTOU, self.check)
+
+        self.rp, self.wp = os.pipe()
+
+        self.mstable = {
+            signal.SIGTTIN: 'ttin',
+            signal.SIGTTOU: 'ttou',
+            signal.SIGHUP: 'hup'
+        }
+        for sig in self.mstable.keys():
+            signal.signal(sig, self.shandler)
         signal.signal(signal.SIGCHLD, self.killzombies)
-        while True:
-            pass
+        try:
+            while True:
+                if not self.sig_queue:
+                    self.piper()
+                else:
+                    sig_str = self.mstable[self.sig_queue.pop(0)]
+                    getattr(self, f'msh_{sig_str}', None)()
+        except KeyboardInterrupt:
+            sys.exit()
+
+
+    def msh_ttin(self):
+        self.needed_worker += 1
+        self.chgworkers()
+
+    def msh_ttou(self):
+        self.needed_worker -= 1
+        self.chgworkers()
+
+    def msh_hup(self):
+        pre = self.needed_worker
+        self.needed_worker = 0
+        self.chgworkers()
+        self.needed_worker = pre
+        self.chgworkers()
+
+
+    def shandler(self, sig, frame):
+        self.sig_queue.append(sig)
+        self.pipew()
+
+    def piper(self):
+        ready = select([self.rp], [], [], 1.0)
+        if ready[0]:
+            os.read(self.rp, 8)
+
+    def pipew(self):
+        os.write(self.wp, b'Excited!')
 
 
     def getwname(self):
         return f'{self.proj_name} - Worker #{self.worker_idx}'
-
-    def reload(self, sig, frame):
-        pass
-
-    def check(self, sig, frame):
-        if sig == signal.SIGTTIN:
-            self.needed_worker += 1
-        elif sig == signal.SIGTTOU:
-            self.needed_worker -= 1
-        if self.needed_worker != self.curr_worker:
-            self.chgworkers()
-
 
     def chgworkers(self):
         if self.needed_worker > self.curr_worker:
@@ -58,6 +82,7 @@ class Manager(object):
 
 
     def addworkers(self):
+        print(f'Adding worker', file=self.log_file)
         offset = self.needed_worker - self.curr_worker
         for i in range(offset):
             self.curr_worker += 1
@@ -67,16 +92,19 @@ class Manager(object):
                 return
             elif pid > 0:
                 self.worker_idx += 1
-                self.wpids.append(pid)
+                self.worker_pids.append(pid)
+
 
     def delworkers(self):
         def kill(pid):
-            self.wpids.remove(pid)
+            self.worker_pids.remove(pid)
             os.kill(pid, signal.SIGKILL)
 
-        pids = self.wpids[:self.curr_worker - self.needed_worker - 1]
+        print(f'Deleting worker', file=self.log_file)
+        pids = self.worker_pids[:self.curr_worker - self.needed_worker - 1]
         for pid in pids:
             kill(pid)
+
 
     def killzombies(self, sig, frame):
         os.waitpid(-1, os.WNOHANG)
