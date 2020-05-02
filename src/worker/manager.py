@@ -17,7 +17,6 @@ class Manager(object):
         self.sig_queue = []
         self.worker_pids = []
         self.worker_idx = 1
-        self.curr_worker = 0
         self.needed_worker = 2
         self.chgworkers()
 
@@ -75,35 +74,28 @@ class Manager(object):
         return f'{self.proj_name} - Worker #{self.worker_idx}'
 
     def chgworkers(self):
-        if self.needed_worker > self.curr_worker:
-            self.addworkers()
-        elif self.needed_worker < self.curr_worker:
-            self.delworkers()
+        curr = len(self.worker_pids)
+        if self.needed_worker > curr:
+            offset = self.needed_worker - curr
+            for i in range(offset):
+                pid = os.fork()
+                if pid:
+                    print(f'Worker [PID = {pid}] Forked', file=self.log_file)
+                    self.worker_idx += 1
+                    self.worker_pids.append(pid)
+                else:
+                    self.sig_queue = []
+                    setproctitle(self.getwname())
+                    return
+        elif self.needed_worker < curr:
+            def kill(pid):
+                self.worker_pids.remove(pid)
+                os.kill(pid, signal.SIGKILL)
+                print(f'Worker [PID = {pid}] Killed', file=self.log_file)
 
-
-    def addworkers(self):
-        print(f'Adding worker', file=self.log_file)
-        offset = self.needed_worker - self.curr_worker
-        for i in range(offset):
-            self.curr_worker += 1
-            pid = os.fork()
-            if pid == 0:
-                setproctitle(self.getwname())
-                return
-            elif pid > 0:
-                self.worker_idx += 1
-                self.worker_pids.append(pid)
-
-
-    def delworkers(self):
-        def kill(pid):
-            self.worker_pids.remove(pid)
-            os.kill(pid, signal.SIGKILL)
-
-        print(f'Deleting worker', file=self.log_file)
-        pids = self.worker_pids[:self.curr_worker - self.needed_worker - 1]
-        for pid in pids:
-            kill(pid)
+            pids = self.worker_pids[:(curr - self.needed_worker)]
+            for pid in pids:
+                kill(pid)
 
 
     def killzombies(self, sig, frame):
