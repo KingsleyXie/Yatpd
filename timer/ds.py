@@ -4,7 +4,7 @@ class DS(object):
     def __init__(self, cmp):
         raise NotImplementedError
 
-    def getdtop(self):
+    def gettop(self):
         raise NotImplementedError
 
     def extracttop(self):

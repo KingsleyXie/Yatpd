@@ -9,6 +9,8 @@ class RBTree(DS):
 
     def gettop(self):
         node = self.tree.root
+        if not node:
+            return None
         if self.cmp == 'min':
             while node and node.left != self.nil:
                 node = node.left

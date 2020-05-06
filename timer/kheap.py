@@ -47,7 +47,7 @@ class KHeap(DS):
     # Get the top element
     def gettop(self):
         if not len(self.list):
-            raise Exception('Heap is empty')
+            return None
         return self.list[0]
 
     # Extract the top element and keep heap properties
