@@ -1,9 +1,11 @@
 import requests
 
-class HttpProxy:
+from sp import SP
+
+class HttpProxy(SP):
     def __init__(self, site):
+        super().__init__()
         self.site = site
-        self.EOL = '\r\n'
 
     def _convert_bin_ret(self, res):
         raw_res = res.raw
@@ -14,31 +16,21 @@ class HttpProxy:
         ret += raw_res.data
         return ret
 
-    def get(self, path, params=None):
+    def dispatch(self, method, path, content=None, header={}):
+        data_key = 'params' if method == 'GET' else 'data'
         return self._convert_bin_ret(
-            requests.get(f'{self.site}{path}', params=params, stream=True)
-        )
-
-    def post(self, path, data=None):
-        return self._convert_bin_ret(
-            requests.post(f'{self.site}{path}', data=data, stream=True)
-        )
-
-    def put(self, path, data=None):
-        return self._convert_bin_ret(
-            requests.put(f'{self.site}{path}', data=data, stream=True)
-        )
-
-    def delete(self, path):
-        return self._convert_bin_ret(
-            requests.delete(f'{self.site}{path}', stream=True)
+            getattr(requests, method.lower())(**{
+                'url': f'{self.site}{path}',
+                'stream': True,
+                data_key: content
+            })
         )
 
 
 if __name__ == '__main__':
     hp = HttpProxy('https://httpbin.org')
-    print(hp.get('/status/200'))
-    print(hp.get('/get', params = {'key': 'value'}))
-    print(hp.post('/post', data = {'key': 'value'}))
-    print(hp.put('/put', data = {'key': 'value'}))
-    print(hp.delete('/delete'))
+    print(hp.dispatch('GET', '/status/200'))
+    print(hp.dispatch('GET', '/get', {'key': 'value'}))
+    print(hp.dispatch('POST', '/post', {'key': 'value'}))
+    print(hp.dispatch('PUT', '/put', {'key': 'value'}))
+    print(hp.dispatch('DELETE', '/delete'))

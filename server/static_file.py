@@ -2,19 +2,13 @@ import re
 import os
 import sys
 
-class StaticFile:
-    def __init__(self, root_dir, project_name, index_file='/index.html'):
-        self.root_dir = root_dir
+from sp import SP
+
+class StaticFile(SP):
+    def __init__(self, root_dir, index_file='/index.html', proj_name=''):
+        super().__init__(root_dir=root_dir, proj_name=proj_name)
         self.index_file = index_file
-
-        self.EOL = '\r\n'
-        self.http_version = 'HTTP/1.1'
-        self.server_info = f'Server: {project_name}{self.EOL}'
-
-        # HTTP status code in use
-        # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
-        self.status_ok = '200 OK'
-        self.status_not_found = '404 Not Found'
+        self.allowed_methods = ['GET']
 
         # Map from file extension pattern to HTTP MIME type header
         # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type
@@ -34,28 +28,31 @@ class StaticFile:
         }
 
 
-    def get(self, path):
-        path = self.index_file if path == '/' else path
-        try:
-            static_file = open(self.root_dir + path, 'rb')
-        except FileNotFoundError:
-            status = self.status_not_found
+    def dispatch(self, method, path, content=None, header={}):
+        if method not in self.allowed_methods:
+            status = self.status_table['na']
         else:
-            status = self.status_ok
-            file_content = static_file.read()
-            static_file.close()
-        response = f'{self.http_version} {status}{self.EOL}'
-        response += f'{self.server_info}'
-        if status == self.status_not_found:
-            return bytes(response, 'utf-8')
+            path = self.index_file if path[-1] == '/' else path
+            try:
+                static_file = open(self.root_dir + path, 'rb')
+            except IOError:
+                status = self.status_table['nf']
+            else:
+                status = self.status_table['ok']
+                file_content = static_file.read()
+                static_file.close()
+        ret = f'{self.http_version} {status}{self.EOL}'
+        ret += f'{self.server_info}{self.EOL}'
+        if status != self.status_table['ok']:
+            return bytes(ret, 'utf-8')
 
         content_type = self.default_mime
         for regex, mime_type in self.ext_mime_map.items():
             if re.search(regex, path):
                 content_type = mime_type
-        response += f'Content-Type: {content_type}{self.EOL}'
-        response += f'Content-Length: {len(bytes(file_content))}{self.EOL}'
-        response += self.EOL
-        response = bytes(response, 'utf-8')
-        response += file_content
-        return response
+        ret += f'Content-Type: {content_type}{self.EOL}'
+        ret += f'Content-Length: {len(bytes(file_content))}{self.EOL}'
+        ret += self.EOL
+        ret = bytes(ret, 'utf-8')
+        ret += file_content
+        return ret
