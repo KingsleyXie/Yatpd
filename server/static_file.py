@@ -44,15 +44,15 @@ class StaticFile(SP):
         ret = f'{self.http_version} {status}{self.EOL}'
         ret += f'{self.server_info}{self.EOL}'
         if status != self.status_table['ok']:
-            return bytes(ret, 'utf-8')
+            return ret.encode(self.encoding)
 
         content_type = self.default_mime
         for regex, mime_type in self.ext_mime_map.items():
             if re.search(regex, path):
                 content_type = mime_type
         ret += f'Content-Type: {content_type}{self.EOL}'
-        ret += f'Content-Length: {len(bytes(file_content))}{self.EOL}'
+        ret += f'Content-Length: {len(file_content.encode(self.encoding))}{self.EOL}'
         ret += self.EOL
-        ret = bytes(ret, 'utf-8')
+        ret = ret.encode(self.encoding)
         ret += file_content
         return ret

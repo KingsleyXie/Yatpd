@@ -37,7 +37,7 @@ class FastCGIProxy(SP):
                 os.putenv('QUERY_STRING', content)
             else:
                 cmd += ' <<< \'' + self._escape_quotes(content) + '\''
-                os.putenv('CONTENT_LENGTH', str(len(bytes(content, 'utf-8'))))
+                os.putenv('CONTENT_LENGTH', str(len(content.encode(self.encoding))))
                 if 'Content-Type' in header:
                     os.putenv('CONTENT_TYPE', header['Content-Type'])
         cmd += '"'
@@ -51,4 +51,4 @@ class FastCGIProxy(SP):
         [os.unsetenv(env) for env in self.optional_env_list]
 
         ret = ret.replace('\n', self.EOL)
-        return bytes(ret, 'utf-8')
+        return ret.encode(self.encoding)

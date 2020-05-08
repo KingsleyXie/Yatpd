@@ -1,11 +1,12 @@
 # Server/Proxy Base Class
 
 class SP(object):
-    def __init__(self, root_dir='', proj_name=''):
+    def __init__(self, root_dir='', proj_name='', encoding='utf-8'):
         super().__init__()
 
         self.EOL = '\r\n'
         self.root_dir = root_dir
+        self.encoding = encoding
         self.http_version = 'HTTP/1.1'
         self.server_info = f'Server: {proj_name}'
 

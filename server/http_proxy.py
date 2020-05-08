@@ -12,7 +12,7 @@ class HttpProxy(SP):
         status_line = f'HTTP/{raw_res.version // 10}.{raw_res.version % 10} '
         status_line += f'{raw_res.status} {raw_res.reason}{self.EOL}'
         response_header = self.EOL.join(f'{k}: {v}' for k, v in raw_res.headers.items())
-        ret = bytes(f'{status_line}{response_header}{self.EOL * 2}', 'utf-8')
+        ret = f'{status_line}{response_header}{self.EOL * 2}'.encode(self.encoding)
         ret += raw_res.data
         return ret
 
