@@ -1,0 +1,49 @@
+project: Yatpd 1.0
+docroot: /abs/path/to/application
+sockfile: /run/php/php7.2-fpm.sock
+host: localhost
+port: 80
+bufsize: 2048
+encoding: utf-8
+httpver: HTTP/1.1
+idxfile: index.html
+logfile: log/main.log
+
+sf_allow_methods: [GET]
+http_proxy_site: https://httpbin.org
+
+# HTTP status code in use
+# https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+status:
+  ok: '200 OK'
+  nf: '404 Not Found'
+  na: '405 Method Not Allowed'
+  so: '303 See Other'
+  pr: '308 Permanent Redirect'
+
+# Map from file extension pattern to HTTP MIME type header
+# https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type
+# https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types
+mime_type_default: text/plain;charset=UTF-8
+mime_type_map:
+  "\\.html$": text/html;charset=UTF-8
+  "\\.js$": text/javascript;charset=UTF-8
+  "\\.css$": text/css;charset=UTF-8
+  "\\.ttf$": font/ttf
+  "\\.woff$": font/woff
+  "\\.(jpg|jpeg|jfif|pjpeg|pjp)$": image/jpeg
+  "\\.(png)$": image/png
+  "\\.(gif)$": image/gif
+  "\\.(svg)$": image/svg+xml
+  "\\.(webp)$": image/webp
+
+# URI-based Server/Proxy dispatch
+serpro_default: StaticFile
+serpro_class_map:
+  "^/http_pass": HTTPProxy
+  "\\.php$": FastCGIProxy
+  "\\.(html|js|css|png|ttf)$": StaticFile
+class_file_map:
+  StaticFile: static_file
+  HTTPProxy: http_proxy
+  FastCGIProxy: fastcgi_proxy
