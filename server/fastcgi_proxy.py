@@ -1,26 +1,21 @@
 import os
 from subprocess import check_output, STDOUT
+from subprocess import CalledProcessError, TimeoutExpired
 
-from server.sp import SP
-from log.log import Log
+from server.serpro import SerPro
 
 
-class FastCGIProxy(SP):
-    def __init__(
-        self,
-        root_dir,
-        proj_name='',
-        sock_dir='/run/php/php7.2-fpm.sock',
-        **kwargs):
-        super().__init__(root_dir=root_dir, proj_name=proj_name)
-        self.sock_dir = sock_dir
-        self.optional_env_list = [
-            'HTTP_COOKIE',
-            'QUERY_STRING',
-            'CONTENT_LENGTH',
-            'CONTENT_TYPE'
-        ]
-        self.log = Log('FastCGIProxy', self.conf['logfile']).append
+class FastCGIProxy(SerPro):
+    def __init__(self):
+        super().__init__(self.__class__.__name__)
+        self.conlen_env = 'CONTENT_LENGTH'
+        self.optional_env_hdkey = {
+            'QUERY_STRING': '',
+            'HTTP_COOKIE': 'Cookie',
+            'CONTENT_TYPE': 'Content-Type',
+            self.conlen_env: 'Content-Length',
+        }
+        self.conlen_hdkey = self.optional_env_hdkey[self.conlen_env]
 
 
     def putenv(self, key, val):
@@ -28,46 +23,59 @@ class FastCGIProxy(SP):
         self.log(f'{key}\n{val}', 'PUT ENV')
 
 
-    def dispatch(self, method, path, content=None, header={}):
+    def dispatch(self, method, path, content, header):
         self.putenv('REQUEST_METHOD', method)
-        self.putenv('SCRIPT_FILENAME', f'{self.root_dir}{path}')
-        if 'Cookie' in header:
-            self.putenv('HTTP_COOKIE', header['Cookie'])
+        self.putenv('SCRIPT_FILENAME', self.docroot + path)
+        for env, hdkey in self.optional_env_hdkey.items():
+            if hdkey in header:
+                self.putenv(env, header[hdkey])
 
-        shell_input = None
         if content:
+            conlen = str(len(content))
             if method == 'GET':
+                # GET requests - Ignoring 'Con-Len' header:
+                # Set query string to environment variable
                 self.putenv('QUERY_STRING', content)
+                content = ''
+            elif self.conlen_hdkey in header:
+                # Non-GET requests - With 'Con-Len' header:
+                # 'Con-Len' is asserted to be equal with conlen
+                if header[self.conlen_hdkey] != conlen:
+                    return self.encode(self.resp_gen(500))
             else:
-                shell_input = content
-                self.putenv('CONTENT_LENGTH', str(len(shell_input)))
-                if 'Content-Type' in header:
-                    self.putenv('CONTENT_TYPE', header['Content-Type'])
+                # Non-GET requests - Without 'Con-Len' header:
+                # Set the 'Con-Len' environment variable
+                self.putenv(self.conlen_env, conlen)
 
-        status_ok = self.status['ok']
-        resp = f'{self.httpver} {status_ok}{self.CRLF}'
-        resp += f'{self.ser_info}{self.CRLF}'
-        resp = self.encode(resp)
-
-        shell_ret = check_output(
-            f'cgi-fcgi -bind -connect {self.sock_dir}',
-            input=content,
-            shell=True,
-            stderr=STDOUT
-        )
-        self.log(shell_ret, 'SHELL RET')
-        resp += shell_ret
+        shell_exec = 'cgi-fcgi -bind -connect ' + self.fastcgi['upstream']
+        try:
+            shell_ret = check_output(
+                shell_exec,
+                shell = True,
+                input = content,
+                stderr = STDOUT,
+                timeout = self.fastcgi['timeout'],
+            )
+            self.log(shell_ret, 'SHELL RET', self.logc['coth'])
+        except CalledProcessError as err:
+            if err.returncode == 11:
+                return self.encode(self.resp_gen(413))
+            return self.encode(self.resp_gen(502))
+        except TimeoutExpired:
+            return self.encode(self.resp_gen(504))
 
         # Unset optional envs to prevent pollution in next run
-        [os.unsetenv(env) for env in self.optional_env_list]
+        [os.unsetenv(env) for env in self.optional_env_hdkey.keys()]
 
+        resp = self.encode(self.resp_gen())
+        resp += shell_ret
         return resp
 
 
 if __name__ == '__main__':
     payloads = [
         [
-            ('GET', '/forum/showMsg.php'),
+            ('GET', '/forum/showMsg.php', '', {}),
             (
                 'POST', '/forum/leaveMsg.php',
                 'captcha=Yatpd&nickname=董先生&message=吼蛙'.encode('utf-8'),
@@ -76,16 +84,14 @@ if __name__ == '__main__':
                     'Cookie': 'PHPSESSID=5ol9v510qkem1hd8kg4s5r3vsi; path=/'
                 }
             ),
-            ('GET', '/forum/showMsg.php')
+            ('GET', '/forum/showMsg.php', '', {})
         ],
         [
-            ('GET', '/assets/captcha/captcha.php'),
+            ('GET', '/assets/captcha/captcha.php', '', {}),
         ]
     ]
 
-    from config.config import getconf
-    conf = getconf()
-    fcp = FastCGIProxy(conf['docroot'], conf['project'], conf['sockfile'])
+    fcp = FastCGIProxy()
     for argv in payloads[0]:
         print(fcp.decode(fcp.dispatch(*argv)))
     for argv in payloads[1]:

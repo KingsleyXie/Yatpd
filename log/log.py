@@ -7,18 +7,19 @@ class Log:
         self.component = component
         self._logger = open(filename, 'a', buffering=1) if filename else stdout
 
+
     def __del__(self):
         self._logger.close()
 
-    def append(self, text, note=''):
-        sep = '-' * 80
-        self._logger.write(
-            f'{sep}\n'
-            + f'{datetime.now()} {self.component} {note}\n'
-            + f'{text}\n\n'
-        )
-    def close(self):
-        self._logger.close()
+
+    def append(self, text, note='', threshold=None, throw=True):
+        if threshold and len(text) > threshold:
+            text = f'(CONTENT TOO LONG) LENGTH: {len(text)}' \
+                if throw else text[:threshold]
+
+        line = '-' * 80 + '\n'
+        info = f'{datetime.now()} {self.component} {note}\n'
+        self._logger.write(f'{line}{info}{text.strip()}\n\n')
 
 
 if __name__ == '__main__':
@@ -29,4 +30,7 @@ if __name__ == '__main__':
     log.append('Life is old there older than the trees', 'LYRICS')
     log.append('Younger than the mountains', 'LYRICS')
     log.append('Growin like a breeze', 'LYRICS')
-    log.close()
+    log.append('\r\nCountry roads\nTake me home\n', 'STRIP')
+    log.append('\nTo the place\r\nI belong\r\n\r\n', 'STRIP')
+    log.append('*' * 600, 'THROW', 300)
+    log.append('*' * 600, 'TRIM', 300, False)
