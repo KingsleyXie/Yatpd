@@ -1,4 +1,4 @@
 [submodule "application"]
 	path = application
-	url = git@github.com:/KingsleyXie/ProgrammingWorksCompetition
+	url = https://github.com/KingsleyXie/ProgrammingWorksCompetition
 	branch = adapt-unix-platform
