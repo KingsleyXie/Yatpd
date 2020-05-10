@@ -9,13 +9,12 @@ class FastCGIProxy(SerPro):
     def __init__(self):
         super().__init__(self.__class__.__name__)
         self.conlen_env = 'CONTENT_LENGTH'
-        self.optional_env_hdkey = {
+        self.env_key_map = {
             'QUERY_STRING': '',
             'HTTP_COOKIE': 'Cookie',
             'CONTENT_TYPE': 'Content-Type',
-            self.conlen_env: 'Content-Length',
+            self.conlen_env: self.conlen_key,
         }
-        self.conlen_hdkey = self.optional_env_hdkey[self.conlen_env]
 
 
     def putenv(self, key, val):
@@ -26,9 +25,9 @@ class FastCGIProxy(SerPro):
     def dispatch(self, method, path, content, header):
         self.putenv('REQUEST_METHOD', method)
         self.putenv('SCRIPT_FILENAME', self.docroot + path)
-        for env, hdkey in self.optional_env_hdkey.items():
-            if hdkey in header:
-                self.putenv(env, header[hdkey])
+        for env, key in self.env_key_map.items():
+            if key in header:
+                self.putenv(env, header[key])
 
         if content:
             conlen = str(len(content))
@@ -37,11 +36,11 @@ class FastCGIProxy(SerPro):
                 # Set query string to environment variable
                 self.putenv('QUERY_STRING', content)
                 content = ''
-            elif self.conlen_hdkey in header:
+            elif self.conlen_key in header:
                 # Non-GET requests - With 'Con-Len' header:
                 # 'Con-Len' is asserted to be equal with conlen
-                if header[self.conlen_hdkey] != conlen:
-                    return self.encode(self.resp_gen(500))
+                if header[self.conlen_key] != conlen:
+                    return self.encode(self.http_resp(500))
             else:
                 # Non-GET requests - Without 'Con-Len' header:
                 # Set the 'Con-Len' environment variable
@@ -56,18 +55,18 @@ class FastCGIProxy(SerPro):
                 stderr = STDOUT,
                 timeout = self.fastcgi['timeout'],
             )
-            self.log(shell_ret, 'SHELL RET', self.logc['coth'])
+            self.log(shell_ret, 'SHELL RET', self.logc['szth'])
         except CalledProcessError as err:
             if err.returncode == 11:
-                return self.encode(self.resp_gen(413))
-            return self.encode(self.resp_gen(502))
+                return self.encode(self.http_resp(413))
+            return self.encode(self.http_resp(502))
         except TimeoutExpired:
-            return self.encode(self.resp_gen(504))
+            return self.encode(self.http_resp(504))
 
         # Unset optional envs to prevent pollution in next run
-        [os.unsetenv(env) for env in self.optional_env_hdkey.keys()]
+        [os.unsetenv(env) for env in self.env_key_map.keys()]
 
-        resp = self.encode(self.resp_gen())
+        resp = self.encode(self.http_resp())
         resp += shell_ret
         return resp
 
@@ -81,14 +80,14 @@ if __name__ == '__main__':
                 'captcha=Yatpd&nickname=董先生&message=吼蛙'.encode('utf-8'),
                 {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'Cookie': 'PHPSESSID=5ol9v510qkem1hd8kg4s5r3vsi; path=/'
-                }
+                    'Cookie': 'PHPSESSID=5ol9v510qkem1hd8kg4s5r3vsi; path=/',
+                },
             ),
-            ('GET', '/forum/showMsg.php', '', {})
+            ('GET', '/forum/showMsg.php', '', {}),
         ],
         [
             ('GET', '/assets/captcha/captcha.php', '', {}),
-        ]
+        ],
     ]
 
     fcp = FastCGIProxy()

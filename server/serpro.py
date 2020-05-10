@@ -11,8 +11,10 @@ class SerPro(object):
         for key, val in config.get().items():
             setattr(self, key, val)
 
-        self.CRLF = '\r\n'
         self.log = Log(component, self.logc['file']).append
+
+        self.CRLF = '\r\n'
+        self.conlen_key = 'Content-Length'
 
 
     # None-able content encode with configured encoding
@@ -29,8 +31,8 @@ class SerPro(object):
         return None
 
 
-    # Generate starting header for HTTP responses
-    def resp_gen(self, status=200, end=True, loct=None):
+    # Generate HTTP responses according to status code
+    def http_resp(self, status=200, end=True, loct=None):
         end = False if status == 200 else end
         if status in range(300, 400) and not loct:
             status = 500
@@ -40,5 +42,5 @@ class SerPro(object):
         resp += f'Server: {self.project}{self.CRLF}'
         resp += f'Location: {loct}' if loct else ''
         resp += self.CRLF if end else ''
-        self.log(resp, 'RESP GEN')
+        self.log(resp, 'HTTP RESP')
         return resp

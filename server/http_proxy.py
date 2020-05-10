@@ -19,7 +19,7 @@ class HTTPProxy(SerPro):
         response_head = f'{status_line}{response_header}{self.CRLF * 2}'
         response_body = raw_res.data
         self.log(response_head, 'RESP HEAD')
-        self.log(response_body, 'RESP BODY', self.logc['coth'])
+        self.log(response_body, 'RESP BODY', self.logc['szth'])
         return self.encode(response_head) + response_body
 
 
@@ -50,7 +50,7 @@ if __name__ == '__main__':
             ('GET', '/image/png', '', {}),
             ('GET', '/image/jpeg', '', {}),
             ('GET', '/image/svg', '', {}),
-        ]
+        ],
     ]
 
     hp = HTTPProxy()

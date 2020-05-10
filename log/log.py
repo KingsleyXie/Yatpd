@@ -12,10 +12,12 @@ class Log:
         self._logger.close()
 
 
+    # Log string or bytes `text` with string `note`
     def append(self, text, note='', threshold=None, throw=True):
-        if threshold and len(text) > threshold:
-            text = f'(CONTENT TOO LONG) LENGTH: {len(text)}' \
-                if throw else text[:threshold]
+        textlen = len(text)
+        if threshold and textlen > threshold:
+            text = f'(TRIMED | ORIGINAL LENGTH: {textlen})\n{text[:threshold]}' \
+                if not throw else f'(CONTENT TOO LONG) LENGTH: {textlen}'
 
         line = '-' * 80 + '\n'
         info = f'{datetime.now()} {self.component} {note}\n'
@@ -23,14 +25,25 @@ class Log:
 
 
 if __name__ == '__main__':
+    payloads = [
+        ('Take Me Home, Country Roads', ''),
+        ('Almost heaven west virginia', 'LYRIC'),
+        ('Blue ridge mountains shenandoah river', 'LYRIC'),
+        ('Life is old there older than the trees', 'LYRIC'),
+        ('Younger than the mountains', 'LYRIC'),
+        ('Growin like a breeze', 'LYRIC'),
+        ('\r\nCountry roads\nTake me home\n', 'STRIP'),
+        ('\nTo the place\r\nI belong\r\n\r\n', 'STRIP'),
+        ('x' * 100, 'TRIM', 60, False),
+        ('x' * 100, 'THROW', 60),
+    ]
+
     log = Log('LogTest')
-    log.append('Take Me Home, Country Roads')
-    log.append('Almost heaven west virginia', 'LYRICS')
-    log.append('Blue ridge mountains shenandoah river', 'LYRICS')
-    log.append('Life is old there older than the trees', 'LYRICS')
-    log.append('Younger than the mountains', 'LYRICS')
-    log.append('Growin like a breeze', 'LYRICS')
-    log.append('\r\nCountry roads\nTake me home\n', 'STRIP')
-    log.append('\nTo the place\r\nI belong\r\n\r\n', 'STRIP')
-    log.append('*' * 600, 'THROW', 300)
-    log.append('*' * 600, 'TRIM', 300, False)
+    for argv in payloads:
+        log.append(*argv)
+        argv = (
+            argv[0].encode('utf-8'),
+            argv[1] + ' BIN',
+            *tuple(list(argv[2:]))
+        )
+        log.append(*argv)

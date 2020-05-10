@@ -23,7 +23,7 @@ class StaticFile(SerPro):
                     f'Redirecting Path `{path}` To `{loct}`',
                     'PREPARE PATH'
                 )
-                return self.encode(self.resp_gen(303, loct=loct))
+                return self.encode(self.http_resp(303, loct=loct))
             elif path[-1] == '/':
                 # Add index file to path
                 self.log(
@@ -42,9 +42,8 @@ class StaticFile(SerPro):
             )
             f.close()
         except IOError:
-            # File not found
             self.log(f'File Not Found:\n{abs_path}', 'FILE OPEN')
-            return self.encode(self.resp_gen(404))
+            return self.encode(self.http_resp(404))
 
         content_type = self.mime_type_default
         for regex, mtype in self.mime_type_map.items():
@@ -56,7 +55,7 @@ class StaticFile(SerPro):
                 )
                 break
 
-        resp = self.resp_gen(200, False)
+        resp = self.http_resp()
         resp += f'Content-Type: {content_type}{self.CRLF}'
         resp += f'Content-Length: {len(file_content)}{self.CRLF}'
         resp += self.CRLF
@@ -76,7 +75,6 @@ if __name__ == '__main__':
             ('GET', '/wrong/path.ext', '', {}),
             ('GET', '/wrong/path', '', {}),
             ('GET', '/wrong/path/', '', {}),
-            ('POST', '/', '', {}),
             ('GET', '/initDB.sql', '', {}),
             ('GET', '/assets/js/competition.js', '', {}),
             ('GET', '/assets/css/competition.css', '', {}),
@@ -84,7 +82,7 @@ if __name__ == '__main__':
         [
             ('GET', '/assets/pictures/icon.png', '', {}),
             ('GET', '/assets/font/elephant.ttf', '', {}),
-        ]
+        ],
     ]
 
     sf = StaticFile()

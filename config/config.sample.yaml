@@ -1,25 +1,70 @@
-project: Yatpd 1.0
-docroot: /abs/path/to/application
-sockfile: /run/php/php7.2-fpm.sock
-host: localhost
-port: 80
-bufsize: 2048
-encoding: utf-8
+# Project name and HTTP version info
+project: Yatpd 20.5.2
 httpver: HTTP/1.1
-idxfile: index.html
-logfile: log/main.log
 
-sf_allow_methods: [GET]
-http_proxy_site: https://httpbin.org
+# Default encoding of contents in HTTP requests and responses
+contenc: utf-8
+
+# Document root directory and default index file
+docroot: /absolute/path/to/application/folder
+idxfile: index.html
+
+# Log file and content size threshold
+logc:
+  file: log/main.log
+  coth: 1024
+  szth: 4096
+
+# Socket listen host:port pair
+listen:
+  host: localhost
+  port: 80
+
+# Socket read buffer
+readbuf:
+  first: 2048
+  left: 32768
 
 # HTTP status code in use
 # https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
 status:
-  ok: '200 OK'
-  nf: '404 Not Found'
-  na: '405 Method Not Allowed'
-  so: '303 See Other'
-  pr: '308 Permanent Redirect'
+  200: '200 OK'
+  303: '303 See Other'
+  308: '308 Permanent Redirect'
+  400: '400 Bad Request'
+  403: '403 Forbidden'
+  404: '404 Not Found'
+  405: '405 Method Not Allowed'
+  413: '413 Payload Too Large'
+  500: '500 Internal Server Error'
+  501: '501 Not Implemented'
+  502: '502 Bad Gateway'
+  503: '503 Service Unavailable'
+  504: '504 Gateway Timeout'
+  505: '505 HTTP Version Not Supported'
+
+# Upstream and timeout seconds of FastCGIProxy
+fastcgi:
+  upstream: localhost:2333
+  timeout: 7
+
+# Upstream and timeout seconds of HTTPProxy
+http:
+  upstream: https://httpbin.org
+  timeout: 7
+
+# Allowed and implemented methods
+# https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
+methods:
+  StaticFile:
+    impl: [GET]
+    allow: [GET]
+  FastCGIProxy:
+    impl: [GET, POST, PUT, DELETE]
+    allow: [GET, HEAD, POST, PUT, DELETE, OPTIONS]
+  HTTPProxy:
+    impl: [GET, HEAD, POST, PUT, DELETE, OPTIONS, PATCH]
+    allow: [GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH]
 
 # Map from file extension pattern to HTTP MIME type header
 # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Type
@@ -40,10 +85,10 @@ mime_type_map:
 # URI-based Server/Proxy dispatch
 serpro_default: StaticFile
 serpro_class_map:
-  "^/http_pass": HTTPProxy
-  "\\.php$": FastCGIProxy
   "\\.(html|js|css|png|ttf)$": StaticFile
+  "\\.php$": FastCGIProxy
+  "^/http_pass": HTTPProxy
 class_file_map:
   StaticFile: static_file
-  HTTPProxy: http_proxy
   FastCGIProxy: fastcgi_proxy
+  HTTPProxy: http_proxy
