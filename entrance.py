@@ -15,21 +15,27 @@ class Entrance(SerPro):
 
     def handle_request(self, request):
         method, path = request['method'], request['path']
+        host = request['header']['Host']
 
-        # Use `path` to determine which class to be instanced
-        classname = self.serpro_default
-        for regex, cname in self.serpro_class_map.items():
-            if re.search(regex, path):
-                classname = cname
-                self.log(
-                    f'Path `{path}`\n'
-                    + f'Using Regex `{regex}`\n'
-                    + f'Matched Class `{cname}`',
-                    'CLASS NAME'
-                )
-                path = re.split(regex, path)[1] \
-                    if cname == 'HTTPProxy' else path
-                break
+        # Use host and path to determine which class to be instanced
+        if host in self.http['upstream']:
+            classname = 'HTTPProxy'
+            self.log(
+                f'Class {classname} Set For Host {host}',
+                'CLASS NAME'
+            )
+        else:
+            classname = self.serpro_default
+            for regex, cname in self.serpro_class_map.items():
+                if re.search(regex, path):
+                    classname = cname
+                    self.log(
+                        f'Path `{path}`\n'
+                        + f'Using Regex `{regex}`\n'
+                        + f'Matched Class `{cname}`',
+                        'CLASS NAME'
+                    )
+                    break
 
         # Check if the request method is valid
         mtd_stat_map = {
@@ -84,6 +90,10 @@ class Entrance(SerPro):
         for line in strheader.split(self.CRLF):
             key, val = line.split(sep['header'], 1)
             header[key] = val.lstrip()
+
+        # All HTTP requests' header must contain 'Host'
+        if not header or 'Host' not in header:
+            return self.http_resp(400)
 
         # Receive the rest of content according to 'Content-Length' header
         if self.conlen_key in header:

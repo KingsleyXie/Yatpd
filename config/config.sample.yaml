@@ -20,8 +20,11 @@ fastcgi:
 
 # Upstream and timeout seconds of HTTPProxy
 http:
-  upstream: https://httpbin.org
-  timeout: 7
+  upstream:
+    httpbin.local.com: https://httpbin.org
+    bing.local.com: https://cn.bing.com
+    fish.local.com: https://mo.fish
+  timeout: 10
 
 # Log file and content size threshold
 logc:
