@@ -1,19 +1,33 @@
-# Project name and HTTP version info
+# Project name
 project: Yatpd 20.5.2
+
+# HTTP version info
 httpver: HTTP/1.1
 
 # Default encoding of contents in HTTP requests and responses
 contenc: utf-8
 
-# Document root directory and default index file
-docroot: /absolute/path/to/application/folder
-idxfile: index.html
+# Document root directory and default index file for StaticFile
+static:
+  docroot: application
+  idxfile: index.html
+
+# Document root, upstream and timeout seconds of FastCGIProxy
+fastcgi:
+  docroot: /absolute/path/to/application/folder
+  upstream: localhost:2333
+  timeout: 7
+
+# Upstream and timeout seconds of HTTPProxy
+http:
+  upstream: https://httpbin.org
+  timeout: 7
 
 # Log file and content size threshold
 logc:
   file: log/main.log
-  coth: 1024
-  szth: 4096
+  small: 1024
+  large: 4096
 
 # Socket listen host:port pair
 listen:
@@ -43,15 +57,22 @@ status:
   504: '504 Gateway Timeout'
   505: '505 HTTP Version Not Supported'
 
-# Upstream and timeout seconds of FastCGIProxy
-fastcgi:
-  upstream: localhost:2333
-  timeout: 7
-
-# Upstream and timeout seconds of HTTPProxy
-http:
-  upstream: https://httpbin.org
-  timeout: 7
+# Error Pages' config for HTTP status >= 400
+errpage:
+  header: 'Content-Type: text/html;charset=UTF-8'
+  docroot: errpages/dist/
+  file:
+    400: HTTP400.html
+    401: HTTP401.html
+    403: HTTP403.html
+    404: HTTP404.html
+    500: HTTP500.html
+    501: HTTP501.html
+    502: HTTP502.html
+    503: HTTP503.html
+    520: HTTP520.html
+    521: HTTP521.html
+    533: HTTP533.html
 
 # Allowed and implemented methods
 # https://developer.mozilla.org/en-US/docs/Web/HTTP/Methods
@@ -60,8 +81,8 @@ methods:
     impl: [GET]
     allow: [GET]
   FastCGIProxy:
-    impl: [GET, POST, PUT, DELETE]
-    allow: [GET, HEAD, POST, PUT, DELETE, OPTIONS]
+    impl: [GET, POST, PUT, DELETE, JSON]
+    allow: [GET, HEAD, POST, PUT, DELETE, JSON, OPTIONS]
   HTTPProxy:
     impl: [GET, HEAD, POST, PUT, DELETE, OPTIONS, PATCH]
     allow: [GET, HEAD, POST, PUT, DELETE, CONNECT, OPTIONS, TRACE, PATCH]

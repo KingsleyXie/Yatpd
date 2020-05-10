@@ -1,4 +1,5 @@
 import requests
+import requests.exceptions as rerr
 from urllib.parse import parse_qsl
 
 from server.serpro import SerPro
@@ -19,7 +20,7 @@ class HTTPProxy(SerPro):
         response_head = f'{status_line}{response_header}{self.CRLF * 2}'
         response_body = raw_res.data
         self.log(response_head, 'RESP HEAD')
-        self.log(response_body, 'RESP BODY', self.logc['szth'])
+        self.log(response_body, 'RESP BODY', self.logc['large'])
         return self.encode(response_head) + response_body
 
 
@@ -27,14 +28,20 @@ class HTTPProxy(SerPro):
         data_key = 'params' if method == 'GET' else 'data'
         content = dict(parse_qsl(content)) \
             if method == 'GET' else self.decode(content)
-        return self._convert_res(
-            getattr(requests, method.lower())(**{
-                'url': self.http['upstream'] + path,
-                'timeout': self.http['timeout'],
-                'stream': True,
-                data_key: content,
-            })
-        )
+        try:
+            http_ret = self._convert_res(
+                getattr(requests, method.lower())(**{
+                    'url': self.http['upstream'] + path,
+                    'timeout': self.http['timeout'],
+                    'stream': True,
+                    data_key: content,
+                })
+            )
+        except rerr.Timeout:
+            return self.http_resp(504)
+        except rerr.RequestException:
+            return self.http_resp(502)
+        return http_ret
 
 
 if __name__ == '__main__':

@@ -1,6 +1,4 @@
 import re
-import os.path as ospath
-from urllib.parse import unquote
 
 from server.serpro import SerPro
 
@@ -15,54 +13,48 @@ class StaticFile(SerPro):
 
 
     def get(self, method, path):
-        if not ospath.isfile(f'{self.docroot}{path}'):
+        if not self.file_exists(path):
             if '.' not in path and path[-1] != '/':
                 # Redirect with `/`
-                loct = f'{path}/'
+                location = f'{path}/'
                 self.log(
-                    f'Redirecting Path `{path}` To `{loct}`',
+                    f'Redirecting Path `{path}` To `{location}`',
                     'PREPARE PATH'
                 )
-                return self.encode(self.http_resp(303, loct=loct))
+                return self.http_resp(303, location=location)
             elif path[-1] == '/':
                 # Add index file to path
                 self.log(
-                    f'Adding Index File To Path:\n{path}',
+                    f'Adding Index File To Path: {path}',
                     'PREPARE PATH'
                 )
-                path += self.idxfile
+                path += self.static['idxfile']
 
-        try:
-            abs_path = unquote(f'{self.docroot}{path}')
-            f = open(abs_path, 'rb')
-            file_content = f.read()
-            self.log(
-                f'File Content Got, Closing File:\n{abs_path}',
-                'FILE OPEN'
-            )
-            f.close()
-        except IOError:
-            self.log(f'File Not Found:\n{abs_path}', 'FILE OPEN')
-            return self.encode(self.http_resp(404))
+        path = self.static['docroot'] + path
+        if not self.file_exists(path):
+            return self.http_resp(404)
+        file_binary = self.file_content(path)
 
         content_type = self.mime_type_default
         for regex, mtype in self.mime_type_map.items():
             if re.search(regex, path):
                 content_type = mtype
                 self.log(
-                    f'Path `{path}`\nUsing Regex `{regex}`\nMatched MIME Type `{mtype}`',
+                    f'Path `{path}`\n'
+                    + f'Using Regex `{regex}`\n'
+                    + f'Matched MIME Type `{mtype}`',
                     'MIME TYPE'
                 )
                 break
 
         resp = self.http_resp()
         resp += f'Content-Type: {content_type}{self.CRLF}'
-        resp += f'Content-Length: {len(file_content)}{self.CRLF}'
+        resp += f'Content-Length: {len(file_binary)}{self.CRLF}'
         resp += self.CRLF
         self.log(resp, 'RESP HEAD')
 
         resp = self.encode(resp)
-        resp += file_content
+        resp += file_binary
         return resp
 
 

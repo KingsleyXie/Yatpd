@@ -16,8 +16,11 @@ class Log:
     def append(self, text, note='', threshold=None, throw=True):
         textlen = len(text)
         if threshold and textlen > threshold:
-            text = f'(TRIMED | ORIGINAL LENGTH: {textlen})\n{text[:threshold]}' \
-                if not throw else f'(CONTENT TOO LONG) LENGTH: {textlen}'
+            leninfo = f'LENGTH: {textlen}'
+            if throw:
+                text = f'(CONTENT TOO LONG) {leninfo}'
+            else:
+                text = f'(TRIMED | ORIGINAL {leninfo})\n{text[:threshold]}'
 
         line = '-' * 80 + '\n'
         info = f'{datetime.now()} {self.component} {note}\n'

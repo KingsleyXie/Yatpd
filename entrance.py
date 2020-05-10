@@ -2,6 +2,7 @@ import re
 import socket
 import select
 from math import ceil
+from urllib.parse import unquote
 from importlib import import_module
 
 from server.serpro import SerPro
@@ -21,7 +22,9 @@ class Entrance(SerPro):
             if re.search(regex, path):
                 classname = cname
                 self.log(
-                    f'Path `{path}`\nUsing Regex `{regex}`\nMatched Class `{cname}`',
+                    f'Path `{path}`\n'
+                    + f'Using Regex `{regex}`\n'
+                    + f'Matched Class `{cname}`',
                     'CLASS NAME'
                 )
                 path = re.split(regex, path)[1] \
@@ -35,7 +38,7 @@ class Entrance(SerPro):
         }
         for mtd, stat in mtd_stat_map.items():
             if method not in self.methods[classname][mtd]:
-                return self.encode(self.http_resp(stat))
+                return self.http_resp(stat)
 
         # Import corresponding module and instanlize the class
         filename = self.class_file_map[classname]
@@ -60,7 +63,7 @@ class Entrance(SerPro):
 
         data = sock.recv(self.readbuf['first'])
         if not data:
-            return self.encode(self.http_resp(400))
+            return self.http_resp(400)
 
         # This `content` here may not be completed
         head, content = data.split(self.encode(self.CRLF * 2), 1)
@@ -70,6 +73,7 @@ class Entrance(SerPro):
         # Parse the request line and string-dumped header
         reqline, strheader = head.split(self.CRLF, 1)
         method, path, _ = reqline.split(sep['reqline'], 2)
+        path = unquote(path)
 
         # Parse query_string from path if any
         if sep['qstring'] in path:
@@ -91,7 +95,7 @@ class Entrance(SerPro):
                 bufsize = self.readbuf['left']
                 freq = ceil((conlen_tot - conlen_curr) / bufsize)
                 self.log(
-                    'Appending content while reading left message body\n'
+                    'Appending Content While Reading Left Message Body\n'
                     + f'CURR {conlen_curr} / TOT {conlen_tot} '
                     + f'/ BUF {bufsize} / FREQ {freq}',
                     'REQ RECV'
@@ -108,15 +112,15 @@ class Entrance(SerPro):
             if header[self.conlen_key] != conlen_val:
                 self.log(
                     f'Content-Length {header[self.conlen_key]} '
-                    + f'and conlen_val {conlen_val} failed to match',
+                    + f'And conlen_val {conlen_val} Failed To Match',
                     'INTERNAL ERROR'
                 )
-                return self.encode(self.http_resp(500))
+                return self.http_resp(500)
         elif type(content) is bytes:
             # 'Con-Len' header should be set for bytes content
             missed_val = f'"{self.conlen_key}: {conlen_val}"'
             self.log(
-                f'Set the missed {missed_val} for bytes content',
+                f'Set The Missed {missed_val} For Bytes Content',
                 'CONLEN SET'
             )
             header[self.conlen_key] = conlen_val
@@ -131,7 +135,7 @@ class Entrance(SerPro):
         for key, val in request.items():
             self.log(
                 f'{key.upper()}: {val}', 'REQUEST PARSE',
-                self.logc['coth'], False
+                self.logc['small'], False
             )
         return self.handle_request(request)
 

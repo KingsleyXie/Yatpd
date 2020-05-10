@@ -2,3 +2,6 @@
 	path = application
 	url = https://github.com/KingsleyXie/ProgrammingWorksCompetition
 	branch = adapt-unix-platform
+[submodule "errpages"]
+	path = errpages
+	url = https://github.com/HttpErrorPages/HttpErrorPages

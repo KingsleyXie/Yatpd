@@ -23,8 +23,12 @@ class FastCGIProxy(SerPro):
 
 
     def dispatch(self, method, path, content, header):
+        scriptfile = self.fastcgi['docroot'] + path
+        if not self.file_exists(scriptfile):
+            return self.http_resp(404)
+
         self.putenv('REQUEST_METHOD', method)
-        self.putenv('SCRIPT_FILENAME', self.docroot + path)
+        self.putenv('SCRIPT_FILENAME', scriptfile)
         for env, key in self.env_key_map.items():
             if key in header:
                 self.putenv(env, header[key])
@@ -40,7 +44,7 @@ class FastCGIProxy(SerPro):
                 # Non-GET requests - With 'Con-Len' header:
                 # 'Con-Len' is asserted to be equal with conlen
                 if header[self.conlen_key] != conlen:
-                    return self.encode(self.http_resp(500))
+                    return self.http_resp(500)
             else:
                 # Non-GET requests - Without 'Con-Len' header:
                 # Set the 'Con-Len' environment variable
@@ -55,13 +59,13 @@ class FastCGIProxy(SerPro):
                 stderr = STDOUT,
                 timeout = self.fastcgi['timeout'],
             )
-            self.log(shell_ret, 'SHELL RET', self.logc['szth'])
+            self.log(shell_ret, 'SHELL RET', self.logc['large'], False)
         except CalledProcessError as err:
             if err.returncode == 11:
-                return self.encode(self.http_resp(413))
-            return self.encode(self.http_resp(502))
+                return self.http_resp(413)
+            return self.http_resp(502)
         except TimeoutExpired:
-            return self.encode(self.http_resp(504))
+            return self.http_resp(504)
 
         # Unset optional envs to prevent pollution in next run
         [os.unsetenv(env) for env in self.env_key_map.keys()]
