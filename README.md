@@ -2,13 +2,13 @@
 :swimmer: Yet another tool project for diploma
 
 ### Usage
-Firstly, try to test the basic functions. Among all the modules, typical parts to test are the three server/proxy implementations:
+Before starting, try to test the basic functions. Among all the modules, typical parts to test are the three server/proxy implementations:
 
 ```shell
 $ cd /path/to/project/root/directory
 
-$ PYTHONPATH=. python3 server/fastcgi_proxy.py > log/fastcgi.log
 $ PYTHONPATH=. python3 server/static_file.py > log/static.log
+$ PYTHONPATH=. python3 server/fastcgi_proxy.py > log/fastcgi.log
 $ PYTHONPATH=. python3 server/http_proxy.py > log/http.log
 ```
 
@@ -31,19 +31,25 @@ Note that in default configuration, `host:port` pair is `localhost:80`, and to b
 $ sudo setcap 'cap_net_bind_service=+ep' /usr/bin/python3
 ```
 
-Check logs under `log/` if you would like to, `main.log` will record the complete process of every requests and responses, while `(fastcgi|static|http).log` are the results of previously mentioned tests.
+Check logs under `log/` if you would like to, `main.log` will record the complete process of every requests and responses, while `(static|fastcgi|http).log` are the results of previously mentioned tests.
 
 ### Dependency
 Project's FastCGIProxy module communicates with FastCGI using [`cgi-fcgi`](https://manpages.debian.org/testing/libfcgi-bin/cgi-fcgi.1.en.html), which can be installed by `apt-get install libfcgi0ldbl` on Debian series or `yum --enablerepo=epel install fcgi` on CentOS series.
-
-Change the config in `config/config.yaml` according to the sample file, `sockfile` is exactly the socket file location of FastCGI server.
 
 If you are using `application` as demo project, following PHP dependencies are required:
 - `php-mysql` for database connection
 - `php-gd` for captcha image generation
 - `php-fpm` for running with FastCGI as Unix Socket
 
+### Notes
+The buffer size `readbuf.first` is assumed to be big enough to read the entire HTTP head part, because the program uses the header value to determine whether there is still a left part to receive, and if true, read the rest of them using buffer size `readbuf.left`.
+
+Parameter `fastcgi.upstream` can be configured to a TCP `host:port` pair OR an Unix domain socket file, however, there is an unknown problem using `cgi-fcgi` with Unix domain socket on [WSL](https://en.wikipedia.org/wiki/Windows_Subsystem_for_Linux) platform: The process executed with large input from stdin by pipe terminates with exit code `11` and output no content, while an input size that is a little larger than 65536 still being handled normally. So if there is any need to upload large files AND the project is deployed on WSL, use TCP instead of Unix domain socket as FastCGI upstream.
+
 ### Annex
 In addition, there are Timer module and Worker module to try, which are wrote for the purpose of learning, and to be reminded, the latter one is not stable.
 
 Files of timer module are all located under the directory `timer`, implemented with K-ary Heap or [Red-Black Tree](https://github.com/stanislavkozlovski/Red-Black-Tree) as data structure.
+
+### Changelog
+See [Releases](https://github.com/KingsleyXie/Yatpd/releases)
