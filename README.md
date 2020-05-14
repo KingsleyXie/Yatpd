@@ -33,6 +33,12 @@ $ sudo setcap 'cap_net_bind_service=+ep' /usr/bin/python3
 
 Check logs under `log/` if you would like to, `main.log` will record the complete process of all requests and responses, while `(static|fastcgi|http).log` are the results of previously mentioned tests.
 
+:tada: All the above tests including other modules' tests are now written down as a helper script in `modtests.sh`, which you can directly run and see the results. You may use `tee` to duplicate outputs to a log file and check them later:
+
+```shell
+$ ./modtests.sh 2>&1 | tee modtests.log
+```
+
 ### Dependency
 Project's FastCGIProxy module communicates with FastCGI using [`cgi-fcgi`](https://manpages.debian.org/testing/libfcgi-bin/cgi-fcgi.1.en.html), which can be installed by `apt-get install libfcgi0ldbl` on Debian series or `yum --enablerepo=epel install fcgi` on CentOS series.
 
