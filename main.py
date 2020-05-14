@@ -110,18 +110,9 @@ class Server(SerPro):
         if self.conlen_key in header:
             conlen_tot = int(header[self.conlen_key])
             conlen_curr = len(content)
-            if conlen_curr < conlen_tot:
-                # Calculate the frequency to read according to buffer size in config
-                bufsize = self.readbuf['left']
-                freq = ceil((conlen_tot - conlen_curr) / bufsize)
-                self.log(
-                    'Appending Content While Reading Left Message Body\n'
-                    + f'CURR {conlen_curr} / TOT {conlen_tot} '
-                    + f'/ BUF {bufsize} / FREQ {freq}',
-                    'REQ RECV'
-                )
-                for _ in range(freq):
-                    content += sock.recv(bufsize)
+            while conlen_curr < conlen_tot:
+                content += sock.recv(self.readbuf['left'])
+                conlen_curr = len(content)
 
         # Note that type(content) is always bytes in this implementation
         if self.conlen_key in header:
@@ -142,8 +133,7 @@ class Server(SerPro):
             # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding
             self.log(
                 f'Header {self.conlen_key} Not Set '
-                + 'For Request With Entity Body\n'
-                + f'{header}',
+                + 'For Request With Entity Body'
                 'NO CONLEN'
             )
             errcode = 501 if 'Transfer-Encoding' in header else 400
