@@ -5,14 +5,15 @@ from datetime import datetime
 class Log:
     def __init__(self, component, filename=None):
         self.component = component
-        self._logger = open(filename, 'a', buffering=1) if filename else stdout
+        self._logger = open(filename, 'a', buffering=1) \
+            if filename else stdout
 
 
     def __del__(self):
         self._logger.close()
 
 
-    # Log string or bytes `text` with string `note`
+    # Log text(string or bytes) with note(string)
     def append(self, text, note='', threshold=None, throw=True):
         textlen = len(text)
         if threshold and textlen > threshold:

@@ -1,14 +1,13 @@
 # Server/Proxy Base Class
+
 import os.path as ospath
 
 from log.log import Log
 from config import config
 
 
-class SerPro(object):
+class SerPro:
     def __init__(self, component):
-        super().__init__()
-
         for key, val in config.get().items():
             setattr(self, key, val)
 
@@ -57,7 +56,7 @@ class SerPro(object):
         return content
 
 
-    # Generate HTTP responses according to status code
+    # Generate HTTP response according to status code
     def http_resp(self, status=200, location=None):
         ranges = {
             'success': range(200, 300),

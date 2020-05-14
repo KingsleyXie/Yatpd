@@ -1,8 +1,9 @@
 import os
-from subprocess import check_output, STDOUT
-from subprocess import CalledProcessError, TimeoutExpired
+from subprocess import TimeoutExpired
+from subprocess import run, STDOUT, PIPE
 
 from server.serpro import SerPro
+from server.mocker import mock_request
 
 
 class FastCGIProxy(SerPro):
@@ -22,80 +23,70 @@ class FastCGIProxy(SerPro):
         self.log(f'{key}\n{val}', 'PUT ENV')
 
 
-    def dispatch(self, method, path, content, header):
+    def dispatch(self, method, path, query, content, header):
         scriptfile = self.fastcgi['docroot'] + path
         if not self.file_exists(scriptfile):
             return self.http_resp(404)
 
+        self.putenv('QUERY_STRING', query)
         self.putenv('REQUEST_METHOD', method)
         self.putenv('SCRIPT_FILENAME', scriptfile)
         for env, key in self.env_key_map.items():
             if key in header:
                 self.putenv(env, header[key])
 
-        if content:
-            conlen = str(len(content))
-            if method == 'GET':
-                # GET requests - Ignoring 'Con-Len' header:
-                # Set query string to environment variable
-                self.putenv('QUERY_STRING', content)
-                content = ''
-            elif self.conlen_key in header:
-                # Non-GET requests - With 'Con-Len' header:
-                # 'Con-Len' is asserted to be equal with conlen
-                if header[self.conlen_key] != conlen:
-                    return self.http_resp(500)
-            else:
-                # Non-GET requests - Without 'Con-Len' header:
-                # Set the 'Con-Len' environment variable
-                self.putenv(self.conlen_env, conlen)
-
-        shell_exec = 'cgi-fcgi -bind -connect ' + self.fastcgi['upstream']
+        cmd = 'cgi-fcgi -bind -connect ' + self.fastcgi['upstream']
         try:
-            shell_ret = check_output(
-                shell_exec,
-                shell = True,
+            cmd_ret = run(
+                cmd,
                 input = content,
                 stderr = STDOUT,
+                stdout = PIPE,
+                shell = True,
                 timeout = self.fastcgi['timeout'],
             )
-            self.log(shell_ret, 'SHELL RET', self.logc['large'], False)
-        except CalledProcessError as err:
-            if err.returncode == 11:
-                return self.http_resp(413)
-            return self.http_resp(502)
         except TimeoutExpired:
             return self.http_resp(504)
 
         # Unset optional envs to prevent pollution in next run
         [os.unsetenv(env) for env in self.env_key_map.keys()]
 
+        retcode, retcont = cmd_ret.returncode, cmd_ret.stdout
+        self.log(str(retcode), 'CMD RETCODE')
+        self.log(retcont, 'CMD RETCONT', self.logc['large'], False)
+        if retcode:
+            retcode_status_map = {
+                # Possible reason: large content sent to WSL Unix socket
+                11: 413,
+                # Could not connect to upstream
+                111: 503
+            }
+            if retcode in retcode_status_map:
+                return self.http_resp(retcode_status_map[retcode])
+            return self.http_resp(502)
+
         resp = self.encode(self.http_resp())
-        resp += shell_ret
+        resp += retcont
         return resp
 
 
 if __name__ == '__main__':
-    payloads = [
-        [
-            ('GET', '/forum/showMsg.php', '', {}),
-            (
-                'POST', '/forum/leaveMsg.php',
+    payloads = {
+        'text': [
+            ['GET', '/forum/showMsg.php'],
+            [
+                'POST', '/forum/leaveMsg.php', '',
                 'captcha=Yatpd&nickname=董先生&message=吼蛙'.encode('utf-8'),
                 {
+                    'Content-Length': '47',
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'Cookie': 'PHPSESSID=5ol9v510qkem1hd8kg4s5r3vsi; path=/',
+                    'Cookie': 'PHPSESSID=5l1b95t2oqmtiqiffivp1phet0; path=/',
                 },
-            ),
-            ('GET', '/forum/showMsg.php', '', {}),
+            ],
+            ['GET', '/forum/showMsg.php'],
         ],
-        [
-            ('GET', '/assets/captcha/captcha.php', '', {}),
+        'raw': [
+            ['GET', '/assets/captcha/captcha.php'],
         ],
-    ]
-
-    fcp = FastCGIProxy()
-    for argv in payloads[0]:
-        print(fcp.decode(fcp.dispatch(*argv)))
-    for argv in payloads[1]:
-        print(fcp.dispatch(*argv))
+    }
+    mock_request(payloads, FastCGIProxy())

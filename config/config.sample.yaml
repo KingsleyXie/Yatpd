@@ -1,5 +1,5 @@
 # Project name
-project: Yatpd 20.5.2
+project: Yatpd 20.5.3
 
 # HTTP version info
 httpver: HTTP/1.1
@@ -7,7 +7,7 @@ httpver: HTTP/1.1
 # Default encoding of contents in HTTP requests and responses
 contenc: utf-8
 
-# Document root directory and default index file for StaticFile
+# Document root and default index file of StaticFile
 static:
   docroot: application
   idxfile: index.html
@@ -21,9 +21,10 @@ fastcgi:
 # Upstream and timeout seconds of HTTPProxy
 http:
   upstream:
-    httpbin.local.com: https://httpbin.org
-    bing.local.com: https://cn.bing.com
+    default: https://httpbin.org
     fish.local.com: https://mo.fish
+    bing.local.com: https://cn.bing.com
+  header: false
   timeout: 10
 
 # Log file and content size threshold
@@ -109,9 +110,16 @@ mime_type_map:
 # URI-based Server/Proxy dispatch
 serpro_default: StaticFile
 serpro_class_map:
+  # http://localhost/index.html -> docroot/index.html
   "\\.(html|js|css|png|ttf)$": StaticFile
+
+  # http://localhost/xxx.php -> /abs/to/docroot/xxx.php
   "\\.php$": FastCGIProxy
-  "^/http_pass": HTTPProxy
+
+  # http://localhost/encoding/utf8 -> https://httpbin.org/encoding/utf8
+  "^/encoding": HTTPProxy
+
+# Map from class name to file name
 class_file_map:
   StaticFile: static_file
   FastCGIProxy: fastcgi_proxy

@@ -1,6 +1,7 @@
 import re
 
 from server.serpro import SerPro
+from server.mocker import mock_request
 
 
 class StaticFile(SerPro):
@@ -8,17 +9,17 @@ class StaticFile(SerPro):
         super().__init__(self.__class__.__name__)
 
 
-    def dispatch(self, method, path, content, header):
+    def dispatch(self, method, path, query, content, header):
         return self.get(method, path)
 
 
     def get(self, method, path):
         if not self.file_exists(path):
             if '.' not in path and path[-1] != '/':
-                # Redirect with `/`
+                # Redirect with /
                 location = f'{path}/'
                 self.log(
-                    f'Redirecting Path `{path}` To `{location}`',
+                    f'Redirecting Path {path} To {location}',
                     'PREPARE PATH'
                 )
                 return self.http_resp(303, location=location)
@@ -40,9 +41,9 @@ class StaticFile(SerPro):
             if re.search(regex, path):
                 content_type = mtype
                 self.log(
-                    f'Path `{path}`\n'
-                    + f'Using Regex `{regex}`\n'
-                    + f'Matched MIME Type `{mtype}`',
+                    f'Path {path}\n'
+                    + f'Using Regex {regex}\n'
+                    + f'Matched MIME Type {mtype}',
                     'MIME TYPE'
                 )
                 break
@@ -59,26 +60,21 @@ class StaticFile(SerPro):
 
 
 if __name__ == '__main__':
-    payloads = [
-        [
-            ('GET', '/', '', {}),
-            ('GET', '/forum', '', {}),
-            ('GET', '/forum/', '', {}),
-            ('GET', '/wrong/path.ext', '', {}),
-            ('GET', '/wrong/path', '', {}),
-            ('GET', '/wrong/path/', '', {}),
-            ('GET', '/initDB.sql', '', {}),
-            ('GET', '/assets/js/competition.js', '', {}),
-            ('GET', '/assets/css/competition.css', '', {}),
+    payloads = {
+        'text': [
+            ['GET'],
+            ['GET', '/forum'],
+            ['GET', '/forum/'],
+            ['GET', '/wrong/path.ext'],
+            ['GET', '/wrong/path'],
+            ['GET', '/wrong/path/'],
+            ['GET', '/initDB.sql'],
+            ['GET', '/assets/js/competition.js'],
+            ['GET', '/assets/css/competition.css'],
         ],
-        [
-            ('GET', '/assets/pictures/icon.png', '', {}),
-            ('GET', '/assets/font/elephant.ttf', '', {}),
+        'raw': [
+            ['GET', '/assets/pictures/icon.png'],
+            ['GET', '/assets/font/elephant.ttf'],
         ],
-    ]
-
-    sf = StaticFile()
-    for argv in payloads[0]:
-        print(sf.decode(sf.dispatch(*argv)))
-    for argv in payloads[1]:
-        print(sf.dispatch(*argv))
+    }
+    mock_request(payloads, StaticFile())

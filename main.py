@@ -8,7 +8,7 @@ from importlib import import_module
 from server.serpro import SerPro
 
 
-class Entrance(SerPro):
+class Server(SerPro):
     def __init__(self):
         super().__init__(self.__class__.__name__)
 
@@ -17,7 +17,7 @@ class Entrance(SerPro):
         method, path = request['method'], request['path']
         host = request['header']['Host']
 
-        # Use host and path to determine which class to be instanced
+        # Use host and path to determine which class should be instanced
         if host in self.http['upstream']:
             classname = 'HTTPProxy'
             self.log(
@@ -30,9 +30,9 @@ class Entrance(SerPro):
                 if re.search(regex, path):
                     classname = cname
                     self.log(
-                        f'Path `{path}`\n'
-                        + f'Using Regex `{regex}`\n'
-                        + f'Matched Class `{cname}`',
+                        f'Path {path}\n'
+                        + f'Using Regex {regex}\n'
+                        + f'Matched Class {cname}',
                         'CLASS NAME'
                     )
                     break
@@ -54,13 +54,15 @@ class Entrance(SerPro):
 
 
     def interact(self, sock):
-        # REF: https://www.w3.org/Protocols/rfc2616/rfc2616-sec5.html
+        # Parse HTTP request data with format defined in RFC
+        # https://tools.ietf.org/html/rfc3986
+        # https://tools.ietf.org/html/rfc2616#section-5
         sep = {
-            # /path?val=key&foo=bar
-            'qstring': '?',
-
-            # GET /path HTTP/1.1
+            # GET /path?val=key&foo=bar HTTP/1.1
             'reqline': ' ',
+
+            # /path?val=key&foo=bar
+            'query': '?',
 
             # Content-Type: text/html; charset=UTF-8
             # Left-trim to get value instead of using ': ' as sep
@@ -69,9 +71,13 @@ class Entrance(SerPro):
 
         data = sock.recv(self.readbuf['first'])
         if not data:
+            self.log(
+                f'Received Empty Data From Client {sock}',
+                'BAD REQUEST'
+            )
             return self.http_resp(400)
 
-        # This `content` here may not be completed
+        # This 'content' here may not be complete
         head, content = data.split(self.encode(self.CRLF * 2), 1)
         head = self.decode(head)
         self.log(head, 'REQ HEAD')
@@ -81,9 +87,10 @@ class Entrance(SerPro):
         method, path, _ = reqline.split(sep['reqline'], 2)
         path = unquote(path)
 
-        # Parse query_string from path if any
-        if sep['qstring'] in path:
-            path, content = path.split(sep['qstring'], 1)
+        # Parse query string from path if any
+        query = ''
+        if sep['query'] in path:
+            path, query = path.split(sep['query'], 1)
 
         # Parse all header parameters
         header = {}
@@ -93,12 +100,15 @@ class Entrance(SerPro):
 
         # All HTTP requests' header must contain 'Host'
         if not header or 'Host' not in header:
+            self.log(
+                f'Host Header Not Set For Client {sock}'
+                'BAD REQUEST'
+            )
             return self.http_resp(400)
 
         # Receive the rest of content according to 'Content-Length' header
         if self.conlen_key in header:
-            conlen_val = header[self.conlen_key]
-            conlen_tot = int(conlen_val)
+            conlen_tot = int(header[self.conlen_key])
             conlen_curr = len(content)
             if conlen_curr < conlen_tot:
                 # Calculate the frequency to read according to buffer size in config
@@ -113,12 +123,10 @@ class Entrance(SerPro):
                 for _ in range(freq):
                     content += sock.recv(bufsize)
 
-        # Type of `content`: query_string if any and bytes otherwise
-        conlen_tot = len(content)
-        conlen_val = str(conlen_tot)
-
+        # Note that type(content) is always bytes in this implementation
         if self.conlen_key in header:
             # 'Con-Len' is asserted to be equal with calculated conlen_val
+            conlen_val = str(len(content))
             if header[self.conlen_key] != conlen_val:
                 self.log(
                     f'Content-Length {header[self.conlen_key]} '
@@ -126,19 +134,26 @@ class Entrance(SerPro):
                     'INTERNAL ERROR'
                 )
                 return self.http_resp(500)
-        elif type(content) is bytes:
-            # 'Con-Len' header should be set for bytes content
-            missed_val = f'"{self.conlen_key}: {conlen_val}"'
+        elif content:
+            # 'Con-Len' header should be set for request with entity-body
+            # Actually there is an exception using the 'Transfer-Encoding' header
+            # Which is not implemented here due to the complexity and lack of time
+            # https://tools.ietf.org/html/rfc7230#section-3.3.2
+            # https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding
             self.log(
-                f'Set The Missed {missed_val} For Bytes Content',
-                'CONLEN SET'
+                f'Header {self.conlen_key} Not Set '
+                + 'For Request With Entity Body\n'
+                + f'{header}',
+                'NO CONLEN'
             )
-            header[self.conlen_key] = conlen_val
+            errcode = 501 if 'Transfer-Encoding' in header else 400
+            return self.http_resp(errcode)
 
         # Generate and log the parsed request parameters
         request = {
             'method': method,
             'path': path,
+            'query': query,
             'content': content,
             'header': header,
         }
@@ -153,7 +168,7 @@ class Entrance(SerPro):
     def serve(self, host, port):
         # Bind to the configured host:port pair and start the server
         serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.log(f'Starting Server `{serversock}` On {host}:{port}', 'SERVER INFO')
+        self.log(f'Starting Server {serversock} On {host}:{port}', 'SERVER INFO')
         serversock.bind((host, port))
         serversock.listen()
 
@@ -169,7 +184,7 @@ class Entrance(SerPro):
                 # Wait for new connections or client events
                 fd_evt_list = epoll.poll()
             except BaseException:
-                self.log(f'Closing Server `{serversock}`', 'SERVER INFO')
+                self.log(f'Closing Server {serversock}', 'SERVER INFO')
                 serversock.close()
                 exit(0)
 
@@ -177,7 +192,7 @@ class Entrance(SerPro):
                 if fd == serverfd:
                     # Server fd readable: accept new connection
                     sock, addr = serversock.accept()
-                    self.log(f'Client `{sock}` Connection Accepted', 'CLIENT INFO')
+                    self.log(f'Client {sock} Connection Accepted', 'CLIENT INFO')
                     fd_sock_map[sock.fileno()] = sock
 
                     # Register read event and prepare to receive request
@@ -186,7 +201,7 @@ class Entrance(SerPro):
                 elif evt & select.EPOLLIN:
                     # Client data readable
                     sock = fd_sock_map[fd]
-                    self.log(f'Client `{sock}` Data Readable', 'EPOLLIN')
+                    self.log(f'Client {sock} Data Readable', 'EPOLLIN')
                     response = self.interact(sock)
 
                     # Register write event and prepare to send response
@@ -195,11 +210,11 @@ class Entrance(SerPro):
                 elif evt & select.EPOLLOUT:
                     # Client data writable
                     sock = fd_sock_map[fd]
-                    self.log(f'Client `{sock}` Data Writable', 'EPOLLIN')
+                    self.log(f'Client {sock} Data Writable', 'EPOLLIN')
                     sock.send(response)
 
                     # Close connection with current client after data sent
-                    self.log(f'Disconnecting Client `{sock}`', 'CLIENT INFO')
+                    self.log(f'Disconnecting Client {sock}', 'CLIENT INFO')
                     sock.close()
 
                     # Unregister events and delete from connection list
@@ -208,5 +223,5 @@ class Entrance(SerPro):
 
 
 if __name__ == '__main__':
-    server = Entrance()
+    server = Server()
     server.serve(server.listen['host'], server.listen['port'])
