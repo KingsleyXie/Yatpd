@@ -1,4 +1,5 @@
-from ds import DS
+from timer.ds import DS
+
 
 class KHeap(DS):
     def __init__(self, cmp='min', k=2):
@@ -6,13 +7,16 @@ class KHeap(DS):
         self.cmp = cmp
         self.k = k
 
+
     # Get parent's index from child's index
     def _pidx(self, cidx):
         return (cidx - 1) // self.k
 
+
     # Get child's index from parent's index and child's order
     def _cidx(self, pidx, cord):
         return pidx * self.k + cord + 1
+
 
     # Compare using the defined type
     def _comp(self, x, y):
@@ -24,7 +28,8 @@ class KHeap(DS):
         else:
             raise Exception('Undefined compare type')
 
-    # Restore Down
+
+    # Restore down
     def _resdown(self, idx):
         tidx = idx
         for cord in range(self.k):
@@ -36,7 +41,8 @@ class KHeap(DS):
             self.list[tidx], self.list[idx] = self.list[idx], self.list[tidx]
             self._resdown(tidx)
 
-    # Restore Up
+
+    # Restore up
     def _resup(self, idx):
         while (idx > 0):
             pidx = self._pidx(idx)
@@ -44,11 +50,13 @@ class KHeap(DS):
                 self.list[pidx], self.list[idx] = self.list[idx], self.list[pidx]
             idx = pidx
 
+
     # Get the top element
     def gettop(self):
         if not len(self.list):
             return None
         return self.list[0]
+
 
     # Extract the top element and keep heap properties
     def extracttop(self):
@@ -58,15 +66,34 @@ class KHeap(DS):
         self._resdown(0)
         return top
 
+
     # Insert an element and keep heap properties
     def insert(self, val):
         self.list.append(val)
         self._resup(len(self.list) - 1)
 
-    # Print all infomation about `K-ary Heap`
+
+    # Print all infomation about 'K-ary Heap'
     def print(self):
         print(
-            f'{self.k}-ary {self.cmp[0].upper()}{self.cmp[1:].lower()} Heap',
+            f'{self.k}-ary {self.cmp.upper()} Heap',
             self.list,
             sep=': '
         )
+        print()
+
+
+if __name__ == '__main__':
+    khp = KHeap()
+    testcase = [5, 3, 7, 1, 4, 6, 2]
+
+    for val in testcase:
+        print('-' * 50)
+        print(f'INSERTING: {val}')
+        khp.insert(val)
+        khp.print()
+
+    for val in testcase:
+        print('-' * 50)
+        print(f'EXTRACTING: {khp.extracttop()}')
+        khp.print()

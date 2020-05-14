@@ -1,49 +1,42 @@
-from unittest import main, TestCase
+import unittest.main
 from heapq import heappush, heappop
 
-from dst import DST
-import os, sys
-sys.path.append(os.path.abspath(os.path.dirname(__file__) + '/' + '..'))
-from kheap import KHeap
-from rbtree import RBTree
+from timer.tests.dst import DST
+from timer.kheap import KHeap
+from timer.rbtree import RBTree
 
-class FuncTest(TestCase, DST):
-    def test_rbtree(self):
-        def _test(dlen):
+
+class FuncTest(DST):
+    def setUp(self):
+        self.kmax = 16
+        self.tsize = 300
+
+
+    def compare(self, ins):
+        for dlen in range(1, self.tsize):
             heap = []
-            rbtree = RBTree()
-            data = self.get_data(dlen)
-            for val in data:
+            for val in self.get_data(dlen):
                 heappush(heap, val)
-                rbtree.insert(val)
-            for i in range(dlen):
+                ins.insert(val)
+            for _ in range(dlen):
                 self.assertEqual(
                     heappop(heap),
-                    rbtree.extracttop(),
-                    'Top Value Diffs: Red-Black Tree'
+                    ins.extracttop(),
+                    'Top Value Diffs'
                 )
-        for dlen in range(1, 100):
-            _test(dlen)
-            print(f'Red-Black Tree With {dlen} Data --- Test Passed')
+
+
+class RBTreeTest(FuncTest):
+    def test_rbtree(self):
+        print(f'\nTesting Red-Black Tree With {self.tsize} Data')
+        self.compare(RBTree())
+
 
     def test_kheap(self):
-        def _test(k, dlen):
-            heap = []
-            kheap = KHeap(k=k)
-            data = self.get_data(dlen)
-            for val in data:
-                heappush(heap, val)
-                kheap.insert(val)
-            for i in range(dlen):
-                self.assertEqual(
-                    heappop(heap),
-                    kheap.extracttop(),
-                    f'Top Value Diffs: {k}-ary Heap'
-                )
-        for k in range(2, 32):
-            for dlen in range(1, 100):
-                _test(k, dlen)
-                print(f'{k}-ary Heap With {dlen} Data --- Test Passed')
+        for k in range(2, self.kmax):
+            print(f'Testing {k}-ary Heap With {self.tsize} Data')
+            self.compare(KHeap(k=k))
+
 
 if __name__ == '__main__':
-    main()
+    unittest.main()

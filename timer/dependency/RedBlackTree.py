@@ -1,4 +1,4 @@
-# SRC: https://github.com/stanislavkozlovski/Red-Black-Tree
+# Source: https://github.com/stanislavkozlovski/Red-Black-Tree
 
 """
 A classic (not left-leaning) Red-Black Tree implementation, supporting addition and deletion.

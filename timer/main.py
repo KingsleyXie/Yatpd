@@ -2,23 +2,32 @@ import time
 import select
 from datetime import datetime
 
-from kheap import KHeap
-from rbtree import RBTree
+from timer.kheap import KHeap
+from timer.rbtree import RBTree
 
 
-class TObj():
+class TimerObject:
     def __init__(self, timestamp, callback):
         self.timestamp = timestamp
         self.callback = callback
 
+
     def __lt__(self, value):
         return self.timestamp < value.timestamp
+
+
     def __gt__(self, value):
         return self.timestamp > value.timestamp
+
+
     def __ge__(self, value):
         return self.timestamp >= value.timestamp
+
+
     def __le__(self, value):
         return self.timestamp <= value.timestamp
+
+
     def __eq__(self, value):
         if value:
             return self.timestamp == value.timestamp
@@ -33,17 +42,20 @@ class Timer:
             self.ds = KHeap(k=k)
         self.epoll = select.epoll()
 
+
     @staticmethod
     def realtime_utc_timestamp():
         return int((
             datetime.utcnow() - datetime(1970, 1, 1)
         ).total_seconds() * 1000)
 
+
     def run_after(self, sep_ms, cb_handler):
-        self.ds.insert(TObj(
+        self.ds.insert(TimerObject(
             (Timer.realtime_utc_timestamp() + sep_ms),
             cb_handler
         ))
+
 
     def start(self):
         while True:
@@ -64,7 +76,7 @@ if __name__ == '__main__':
     def utcnow():
         print('Current Timestamp:', Timer.realtime_utc_timestamp())
 
-    timer = Timer(k=6)
+    timer = Timer()
     for mst in range(500, 6000, 300):
         timer.run_after(mst, utcnow)
     timer.start()

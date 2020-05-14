@@ -1,6 +1,6 @@
 # Data Structure Base Class
 
-class DS(object):
+class DS:
     def __init__(self, cmp):
         raise NotImplementedError
 
