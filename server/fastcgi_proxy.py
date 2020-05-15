@@ -65,7 +65,17 @@ class FastCGIProxy(SerPro):
                 return self.http_resp(retcode_status_map[retcode])
             return self.http_resp(502)
 
-        resp = self.encode(self.http_resp())
+        # Parse entity body of command returned data to calculate length
+        double_crlf = self.encode(self.CRLF * 2)
+        retbody = retcont if double_crlf not in retcont \
+            else retcont.split(double_crlf, 1)[1]
+
+        # Add Content-Length header to the response
+        resp_header = self.http_resp()
+        resp_header += f'{self.conlen_key}: {len(retbody)}{self.CRLF}'
+
+        # Generate actual response binary data
+        resp = self.encode(resp_header)
         resp += retcont
         return resp
 

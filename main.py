@@ -53,7 +53,7 @@ class Server(SerPro):
         return instance.dispatch(**request)
 
 
-    def interact(self, sock):
+    def interact(self, sock, first):
         # Parse HTTP request data with format defined in RFC
         # https://tools.ietf.org/html/rfc3986
         # https://tools.ietf.org/html/rfc2616#section-5
@@ -69,22 +69,14 @@ class Server(SerPro):
             'header': ':',
         }
 
-        data = sock.recv(self.readbuf['first'])
-        if not data:
-            self.log(
-                f'Received Empty Data From Client {sock}',
-                'BAD REQUEST'
-            )
-            return self.http_resp(400)
-
-        # This 'content' here may not be complete
-        head, content = data.split(self.encode(self.CRLF * 2), 1)
+        # This 'content' here could be incomplete
+        head, content = first.split(self.encode(self.CRLF * 2), 1)
         head = self.decode(head)
         self.log(head, 'REQ HEAD')
 
         # Parse the request line and string-dumped header
         reqline, strheader = head.split(self.CRLF, 1)
-        method, path, _ = reqline.split(sep['reqline'], 2)
+        method, path, httpver = reqline.split(sep['reqline'], 2)
         path = unquote(path)
 
         # Parse query string from path if any
@@ -98,13 +90,25 @@ class Server(SerPro):
             key, val = line.split(sep['header'], 1)
             header[key] = val.lstrip()
 
+        # Determine if the connection should be closed
+        # https://tools.ietf.org/html/rfc2616#section-8.1.2
+        close_conn = True if httpver < 'HTTP/1.1' else False
+        if 'Connection' in header:
+            op_conn = header['Connection'].lower()
+            if op_conn == 'keep-alive':
+                close_conn = False
+            elif op_conn == 'close':
+                close_conn = True
+        next_stat = 'Closed' if close_conn else 'Kept'
+        self.log(f'Connection Of Client {sock} Will Be {next_stat}', 'HTTP CONN')
+
         # All HTTP requests' header must contain 'Host'
         if not header or 'Host' not in header:
             self.log(
                 f'Host Header Not Set For Client {sock}'
                 'BAD REQUEST'
             )
-            return self.http_resp(400)
+            return self.http_resp(400), close_conn
 
         # Receive the rest of content according to 'Content-Length' header
         if self.conlen_key in header:
@@ -120,11 +124,11 @@ class Server(SerPro):
             conlen_val = str(len(content))
             if header[self.conlen_key] != conlen_val:
                 self.log(
-                    f'Content-Length {header[self.conlen_key]} '
+                    f'{self.conlen_key} {header[self.conlen_key]} '
                     + f'And conlen_val {conlen_val} Failed To Match',
                     'INTERNAL ERROR'
                 )
-                return self.http_resp(500)
+                return self.http_resp(500), close_conn
         elif content:
             # 'Con-Len' header should be set for request with entity-body
             # Actually there is an exception using the 'Transfer-Encoding' header
@@ -137,7 +141,7 @@ class Server(SerPro):
                 'NO CONLEN'
             )
             errcode = 501 if 'Transfer-Encoding' in header else 400
-            return self.http_resp(errcode)
+            return self.http_resp(errcode), close_conn
 
         # Generate and log the parsed request parameters
         request = {
@@ -148,11 +152,12 @@ class Server(SerPro):
             'header': header,
         }
         for key, val in request.items():
-            self.log(
-                f'{key.upper()}: {val}', 'REQUEST PARSE',
-                self.logc['small'], False
-            )
-        return self.handle_request(request)
+            loggable = type(val) is str or type(val) is bytes
+            text = val if loggable else str(val)
+            note = f'REQ PARSE {key.upper()}'
+            self.log(text, note, self.logc['small'], False)
+
+        return self.handle_request(request), close_conn
 
 
     def serve(self, host, port):
@@ -161,18 +166,19 @@ class Server(SerPro):
         self.log(f'Starting Server {serversock} On {host}:{port}', 'SERVER INFO')
         serversock.bind((host, port))
         serversock.listen()
+        serversock.setblocking(False)
 
         # Register read event for server socket
         serverfd = serversock.fileno()
         evtmask = select.EPOLLIN
         epoll = select.epoll()
         epoll.register(serverfd, evtmask)
-        fd_sock_map = {}
+        fd_sock_map, fd_res_map, fd_close_map = {}, {}, {}
 
         while True:
             try:
                 # Wait for new connections or client events
-                fd_evt_list = epoll.poll()
+                fd_evt_list = epoll.poll(1)
             except BaseException:
                 self.log(f'Closing Server {serversock}', 'SERVER INFO')
                 serversock.close()
@@ -187,29 +193,50 @@ class Server(SerPro):
 
                     # Register read event and prepare to receive request
                     epoll.register(sock, select.EPOLLIN)
+                    sock.setblocking(False)
 
-                elif evt & select.EPOLLIN:
-                    # Client data readable
+                else:
+                    # Client fd events: EPOLLIN or EPOLLOUT
                     sock = fd_sock_map[fd]
-                    self.log(f'Client {sock} Data Readable', 'EPOLLIN')
-                    response = self.interact(sock)
 
-                    # Register write event and prepare to send response
-                    epoll.modify(fd, select.EPOLLOUT)
+                    # Function to close current socket client
+                    def close_client(reason):
+                        self.log(
+                            f'Disconnecting Client {sock} For {reason}',
+                            'CLIENT INFO'
+                        )
+                        sock.close()
 
-                elif evt & select.EPOLLOUT:
-                    # Client data writable
-                    sock = fd_sock_map[fd]
-                    self.log(f'Client {sock} Data Writable', 'EPOLLIN')
-                    sock.send(response)
+                        # Unregister events and delete from connection list
+                        epoll.unregister(fd)
+                        fd_sock_map.pop(fd)
 
-                    # Close connection with current client after data sent
-                    self.log(f'Disconnecting Client {sock}', 'CLIENT INFO')
-                    sock.close()
+                    if evt & select.EPOLLIN:
+                        # Client fd readable
+                        first = sock.recv(self.readbuf['first'])
+                        if not first:
+                            close_client('EMPTY READ')
+                            continue
 
-                    # Unregister events and delete from connection list
-                    epoll.unregister(fd)
-                    del fd_sock_map[fd]
+                        fd_res_map[fd], close_conn = self.interact(sock, first)
+                        if close_conn:
+                            fd_close_map[fd] = True
+
+                        # Register write event and prepare to send response
+                        epoll.modify(fd, select.EPOLLOUT)
+
+                    elif evt & select.EPOLLOUT:
+                        # Client fd writable
+                        sock.send(fd_res_map[fd])
+                        fd_res_map.pop(fd)
+                        self.log(f'Response Data Sent To Client {sock}', 'RES SENT')
+
+                        if fd in fd_close_map:
+                            close_client('CONNECTION CLOSE')
+                            fd_close_map.pop(fd)
+                        else:
+                            # Reuse the connection
+                            epoll.modify(fd, select.EPOLLIN)
 
 
 if __name__ == '__main__':
