@@ -14,7 +14,9 @@ class StaticFile(SerPro):
 
 
     def get(self, method, path):
-        if not self.file_exists(path):
+        # Check and prepare file path
+        file_path = self.static['docroot'] + path
+        if not self.file_exists(file_path):
             if '.' not in path and path[-1] != '/':
                 # Redirect with /
                 location = f'{path}/'
@@ -31,11 +33,13 @@ class StaticFile(SerPro):
                 )
                 path += self.static['idxfile']
 
-        path = self.static['docroot'] + path
-        if not self.file_exists(path):
+        # Get the real file content
+        file_path = self.static['docroot'] + path
+        if not self.file_exists(file_path):
             return self.http_resp(404)
-        file_binary = self.file_content(path)
+        file_binary = self.file_content(file_path)
 
+        # Determine MIME type of the file
         content_type = self.mime_type_default
         for regex, mtype in self.mime_type_map.items():
             if re.search(regex, path):
@@ -50,7 +54,7 @@ class StaticFile(SerPro):
 
         resp = self.http_resp()
         resp += f'Content-Type: {content_type}{self.CRLF}'
-        resp += f'Content-Length: {len(file_binary)}{self.CRLF}'
+        resp += f'{self.conlen_key}: {len(file_binary)}{self.CRLF}'
         resp += self.CRLF
         self.log(resp, 'RESP HEAD')
 
